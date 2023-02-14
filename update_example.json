@@ -1,0 +1,28 @@
+﻿{
+    "module": "ntdll.dll",
+
+    "patterns":[
+        {
+            "name": "RtlGetCurrentPeb",
+
+            "aob": [
+                {
+                    "mode" : "rva",
+                    "offset": "-0x0 + -0",
+                    "pattern": "65 48 8B 04 25 30 00 00 00 48 8B 40 60 C3"
+                },
+
+                {
+                    "mode" : "rva",
+                    "offset": "+0 - 0x0",
+                    "pattern": "64 A1 18 00 00 00 8B 40 30 C3",
+
+                    "equal": {
+                        "cmd": "ret",
+                        "range": 9
+                    }
+                }
+            ]
+        }
+    ]
+}
