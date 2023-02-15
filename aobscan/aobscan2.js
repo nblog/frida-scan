@@ -38,7 +38,7 @@ class addr_transform {
 
     equal(addr, cmd="call") {
         let info = Instruction.parse( addr );
-        return [ info.mnemonic, info.opStr ].join(" ").includes( cmd.toLowerCase() );
+        return [ info.mnemonic, info.opStr ].join(" ").startsWith( cmd.toLowerCase() );
     };
 
     aobscan(pattern) {
