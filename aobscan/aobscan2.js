@@ -2,10 +2,10 @@
 
 class addr_transform {
 
-    #moduleName = Process.enumerateModules()[0].name;
+    #moduleName = ''
 
-    constructor(moduleName="") {
-        if (moduleName.length) this.#moduleName = moduleName;
+    constructor(moduleName='') {
+        this.#moduleName = moduleName || Process.enumerateModules()[0].name;
     };
 
     module() {
@@ -25,30 +25,22 @@ class addr_transform {
     imm64(addr) { return addr.readU64(); }
 
 
-    mem(addr) {
-        let absValue = this.imm32(addr);
-        return 4 == Process.pointerSize ? absValue : 
-        ( this.rva(addr) + absValue + 4 );
-    };
-
     call(addr) {
         let absValue = this.rva(addr) + this.imm32( addr.add(1) ) + 5;
         return ( absValue & 0xffffffff );
     };
 
-    equal(addr, cmd="call") {
+    equal(addr, cmd='call') {
         let info = Instruction.parse( addr );
-        return [ info.mnemonic, info.opStr ].join(" ").startsWith( cmd.toLowerCase() );
+        return [ info.mnemonic, info.opStr ].join(' ').startsWith( cmd.toLowerCase() );
     };
 
     aobscan(pattern) {
-        let matches = [];
-        this.module().enumerateRanges("--x").forEach(function(range) {
-            Memory.scanSync(range.base, range.size, pattern).forEach(function(match) {
-                matches.push(match);
-            });
-        });
-        return matches;
+        for (const m of this.module().enumerateRanges('--x')) {
+            let match = Memory.scanSync(m.base, m.size, pattern);
+            if (0 < match.length) return match;
+        }
+        return [];
     };
 }
 

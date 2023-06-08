@@ -9,14 +9,14 @@ import os, sys, time, json, random, base64, codecs
 import frida
 
 class frida_init:
-    def __init__(self, process_object, scriptjs:str, remote=False):
+    def __init__(self, process_object, scriptjs:str, remote=''):
         self.device = frida.get_remote_device() if (remote) else \
             frida.get_local_device()
 
         self.session = self.device.attach(process_object)
 
         scriptcode = \
-            codecs.open(scriptjs, "r", encoding="utf-8-sig").read()
+            codecs.open(scriptjs, encoding='utf-8-sig').read()
         self.script = self.session.create_script(scriptcode)
 
         self.script.on("message", lambda msg, data: ())
@@ -47,7 +47,7 @@ class aob_data:
 
     def __init__(self, vJson:dict):
         (self.pattern, self.mode, self.offset, self.equal) = \
-            (None, None, "0", None)
+            (None, None, '0', None)
         for n in vJson: self.__setattr__(n, vJson[n])
 
         if (self.equal): self.equal = equal_data(self.equal)
@@ -60,7 +60,7 @@ class pattern_data:
 
     def __init__(self, vJson:dict):
         (self.name, self.aob, self.note, self.value) = \
-            (None, [], "dummy", "0")
+            (None, [], 'dummy', '0')
         for n in vJson: self.__setattr__(n, vJson[n])
 
         if (self.aob): self.aob = list(map(aob_data, self.aob))
@@ -75,14 +75,14 @@ class program_aobscan:
 
     def export(self, file_json="export.json"):
         json.dump(self.update_data, 
-            codecs.open(file_json, "w", encoding="utf-8-sig"))
+            open(file_json, 'w', encoding='utf-8-sig'))
         return
 
     def scan(self, file_json:str):
         caches = self.update_data.copy()
 
         vJson = json.load(
-            codecs.open(file_json, "r", encoding="utf-8-sig")
+            codecs.open(file_json, encoding='utf-8-sig')
         )
 
         if (not "patterns" in vJson): return
