@@ -1,4 +1,5 @@
 
+/* https://github.com/nblog/my-fridajs-example/blob/dev/aobscan.ts */
 
 class addr_transform {
 
@@ -8,32 +9,32 @@ class addr_transform {
         this.#moduleName = moduleName || Process.enumerateModules()[0].name;
     };
 
-    module() {
-        return Process.getModuleByName(this.#moduleName);
-    };
+    module() { return Process.getModuleByName(this.#moduleName); };
 
     base() { return this.module().base; };
 
     va(rva) { return this.base().add(rva); };
 
-    rva(va) { return Number( va.sub(this.base()).and(0xffffffff) ); };
+    imm8(addr) { return addr.readS8(); };
 
-    imm8(addr) { return addr.readU8(); };
+    imm16(addr) { return addr.readS16(); };
 
-    imm32(addr) { return addr.readU32(); };
+    imm32(addr) { return addr.readS32(); };
 
-    imm64(addr) { return addr.readU64(); }
+    imm64(addr) { return addr.readS64(); }
 
-    mem32(addr) { return addr.add(this.imm32(addr)).add(4) };
+    rel32(addr) { return addr.add(this.imm32(addr)).add(4) };
+
+    rva(va) { return Number(va.sub(this.base()).and(0x7fffffff)); };
 
     call(addr) {
         addr = addr.add(1);
-        return this.rva(this.mem32(addr));
+        return this.rva(this.rel32(addr));
     };
 
     equal(addr, cmd='call') {
-        let info = Instruction.parse( addr );
-        return [ info.mnemonic, info.opStr ].join(' ').startsWith( cmd.toLowerCase() );
+        let info = Instruction.parse(addr);
+        return [ info.mnemonic, info.opStr ].join(' ').includes(cmd.toLowerCase());
     };
 
     aobscan(pattern) {
@@ -46,7 +47,6 @@ class addr_transform {
 }
 
 
-/* https://github.com/nblog/my-fridajs-example/blob/dev/aobscan.ts */
 var addr = new addr_transform();
 
 rpc.exports = {
