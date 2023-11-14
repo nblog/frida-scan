@@ -12,6 +12,6 @@ if __name__ == "__main__":
 
     updater = program_aobscan(app, "aobscan\\aobscan2.js")
 
-    updater.scan("update_example.json"), updater.export("export.json")
+    updater.scan("update_example.json"); updater.export("export.json")
 
     print("done")

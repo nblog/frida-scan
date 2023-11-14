@@ -60,13 +60,15 @@ rpc.exports = {
 
         let matches = addr.aobscan(aob.pattern);
 
+        const name = aob.note || aob.name;
+
         if (0 == matches.length) {
-            console.error(`aobscan: ${aob.note} not found.`);
+            console.error(`aobscan: \"${name}\" not found.`);
             return 0;
         }
 
         if (1 < matches.length) {
-            console.warn(`aobscan: ${aob.note} matched ${matches.length} times, use the first one.`);
+            console.warn(`aobscan: \"${name}\" matched ${matches.length} times, use the first one.`);
         }
 
         let match = ptr(matches[0].address).add(aob.offset);
@@ -89,17 +91,19 @@ rpc.exports = {
     EQUAL(vJson) {
         if (null == vJson) return null;
         return {
-            "range": Number(vJson["range"]),
-            "cmd": String(vJson["cmd"])
+            "cmd": String(vJson["cmd"]),
+            "range": Number(vJson["range"])
         };
     },
     AOBOBJECT(vJson) {
         if (null == vJson) return null;
         return {
+            "name": String(vJson["name"]),
             "note": String(vJson["note"]),
-            "offset": Number(vJson["offset"]),
+
             "mode": String(vJson["mode"]),
             "pattern": String(vJson["pattern"]),
+            "offset": Number(vJson["offset"]),
             "equal": this.EQUAL(vJson["equal"]),
         };
     }
