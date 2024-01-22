@@ -33,7 +33,6 @@ class aobscan_exception(Exception):
 
 ''' data model '''
 
-@staticmethod
 def eval_expr(expr:str, table:dict):
     return int( eval(expr, None, table) )
 
