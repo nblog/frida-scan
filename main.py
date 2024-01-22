@@ -8,7 +8,7 @@ if __name__ == "__main__":
     from aobscan import program_aobscan
 
 
-    app = "wechat.exe" # or pid
+    app = "notepad.exe" # or pid
 
     updater = program_aobscan(app, "aobscan\\aobscan2.js")
 

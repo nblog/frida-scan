@@ -97,10 +97,10 @@ class program_aobscan:
                 ''' rpc: aob-scan '''
                 vJson = pattern.model_dump(include={'name', 'note'})
                 rva = self.__aobscan(dict(vJson, **aob.model_dump()))
+                if (not rva): continue
 
                 ''' override '''
                 caches[ pattern.name ] = rva
-
                 if (rva): break
 
         self.update_data.update(caches)
