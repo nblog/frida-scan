@@ -13,19 +13,19 @@ class addr_transform {
 
     base() { return this.module().base; };
 
+    rva(va) { return va.sub(this.base()).and(0x7fffffff); };
+
     va(rva) { return this.base().add(rva); };
 
-    rva(va) { return Number(va.sub(this.base()).and(0x7fffffff)); };
+    imm8(addr) { return addr.readU8(); };
 
-    imm8(addr) { return addr.readS8(); };
+    imm16(addr) { return addr.readU16(); };
 
-    imm16(addr) { return addr.readS16(); };
+    imm32(addr) { return addr.readU32(); };
 
-    imm32(addr) { return addr.readS32(); };
+    imm64(addr) { return addr.readU64(); }
 
-    imm64(addr) { return addr.readS64(); }
-
-    mem32(addr) { return this.rva(addr.add(this.imm32(addr)).add(4)); };
+    mem32(addr) { return this.rva(addr.add(addr.readS32()).add(4)); };
 
     call(addr) { return this.mem32(addr.add(1)); };
 
