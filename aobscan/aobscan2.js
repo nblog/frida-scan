@@ -13,9 +13,9 @@ class addr_transform {
 
     base() { return this.module().base; };
 
-    rva(va) { return va.sub(this.base()).and(0x7fffffff); };
-
     va(rva) { return this.base().add(rva); };
+
+    rva(va) { return Number(va.sub(this.base()).and(0x7fffffff)); };
 
     imm8(addr) { return addr.readU8(); };
 
