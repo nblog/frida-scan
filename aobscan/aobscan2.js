@@ -15,6 +15,8 @@ class addr_transform {
 
     va(rva) { return this.base().add(rva); };
 
+    rva(va) { return Number(va.sub(this.base()).and(0x7fffffff)); };
+
     imm8(addr) { return addr.readS8(); };
 
     imm16(addr) { return addr.readS16(); };
@@ -23,14 +25,9 @@ class addr_transform {
 
     imm64(addr) { return addr.readS64(); }
 
-    rel32(addr) { return addr.add(this.imm32(addr)).add(4) };
+    mem32(addr) { return this.rva(addr.add(this.imm32(addr)).add(4)); };
 
-    rva(va) { return Number(va.sub(this.base()).and(0x7fffffff)); };
-
-    call(addr) {
-        addr = addr.add(1);
-        return this.rva(this.rel32(addr));
-    };
+    call(addr) { return this.mem32(addr.add(1)); };
 
     equal(addr, cmd='call') {
         let info = Instruction.parse(addr);
