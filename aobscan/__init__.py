@@ -10,8 +10,9 @@ from pydantic.functional_validators import AfterValidator
 import frida
 
 class frida_init:
-    def __init__(self, process_object, scriptjs:str, remote=''):
-        self.device = frida.get_remote_device() if (remote) else \
+    def __init__(self, process_object, scriptjs:str, **options):
+        self.device = frida.get_device_manager().add_remote_device(options['remote']) \
+            if options.get('remote') else \
             frida.get_local_device()
 
         self.session = self.device.attach(process_object)
@@ -59,8 +60,8 @@ class pattern_json(BaseModel):
 
 
 class program_aobscan:
-    def __init__(self, process_object, aobscanjs="aobscan.js"):
-        self.app = frida_init(process_object, aobscanjs)
+    def __init__(self, process_object, aobscanjs:str, **options):
+        self.app = frida_init(process_object, aobscanjs, **options)
         self.update_data:Dict[str, int] = {}
 
     def export(self, file_json="export.json"):
