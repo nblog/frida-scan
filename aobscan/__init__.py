@@ -106,8 +106,22 @@ class program_aobscan:
 
         self.update_data.update(caches)
 
+        ''' version '''
+        self.update_data.setdefault('#version', self.__program_version(cfgJson.module))
+
+
     def __change_module(self, module:str):
         return self.app.rpc("searchmodule")(module)
 
     def __aobscan(self, aob:dict):
         return self.app.rpc("aobscan")(aob)
+
+    def __program_version(self, module=''):
+        import win32api
+        target = self.app.rpc("modulepath")(module)
+        info = win32api.GetFileVersionInfo(target, "\\")
+        ms, ls = info['FileVersionMS'], info['FileVersionLS']
+        return '{}.{}.{}.{}'.format(
+            win32api.HIWORD(ms), win32api.LOWORD(ms),
+            win32api.HIWORD(ls), win32api.LOWORD(ls)
+        )

@@ -48,6 +48,10 @@ var addr = new addr_transform();
 
 rpc.exports = {
 
+    modulepath(module_name='') {
+        return (module_name ? Process.getModuleByName(module_name) : Process.enumerateModules()[0]).path;
+    },
+
     searchmodule(module_name) {
         addr = new addr_transform(module_name);
     },
