@@ -6,9 +6,10 @@
     "configurations": [
         {
             "name": "aobscan",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
-            "program": "main.py"
+            "program": "main.py",
+            "args": [ "notepad.exe", "example.json", "export.json" ]
         }
     ]
 }
