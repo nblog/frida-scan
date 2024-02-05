@@ -69,7 +69,12 @@ rpc.exports = {
         }
 
         if (1 < matches.length) {
-            console.warn(`aobscan: \"${name}\" matches to ${matches.length}, using the ${aob.selected}th.`);
+            function toOrdinal(number) {
+                let n = number % 100;
+                let suffix = ['th', 'st', 'nd', 'rd', 'th'][n > 3 && n < 21 || n % 10 > 3 ? 0 : n % 10];
+                return number + suffix;
+            }
+            console.warn(`aobscan: \"${name}\" matches to ${matches.length}, using the ${toOrdinal(aob.selected)}.`);
         }
 
         let match = ptr(matches[aob.selected - 1].address).add(aob.offset);
