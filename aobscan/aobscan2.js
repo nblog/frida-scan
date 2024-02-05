@@ -69,10 +69,10 @@ rpc.exports = {
         }
 
         if (1 < matches.length) {
-            console.warn(`aobscan: \"${name}\" matched ${matches.length} times, use the first one.`);
+            console.warn(`aobscan: \"${name}\" matches to ${matches.length}, using the ${aob.selected}th.`);
         }
 
-        let match = ptr(matches[0].address).add(aob.offset);
+        let match = ptr(matches[aob.selected - 1].address).add(aob.offset);
 
         if (null != aob.equal) {
             let rematch = match;
@@ -104,6 +104,7 @@ rpc.exports = {
 
             "mode": String(vJson["mode"]),
             "pattern": String(vJson["pattern"]),
+            "selected": Number(vJson["selected"]),
             "offset": Number(vJson["offset"]),
             "equal": this.EQUAL(vJson["equal"]),
         };

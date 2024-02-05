@@ -44,6 +44,7 @@ class ins_equal(BaseModel):
 class aob_data(BaseModel):
     mode: str
     pattern: str
+    selected: Optional[int] = 1
     offset: Optional[str] = '0' # val_expr
     equal: Optional[ins_equal] = None
 
