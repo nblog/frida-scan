@@ -1,0 +1,27 @@
+{
+  "module": "ntdll.dll",
+  "patterns": [
+    {
+      "name": "RtlGetCurrentPeb",
+      "note": "Get current Process Environment Block",
+      "value": "0",
+      "aob": [
+        {
+          "mode": "rva",
+          "pattern": "65 48 8B 04 25 30 00 00 00 48 8B 40 60 C3",
+          "selected": 1,
+          "offset": "+0x9 +0x4",
+          "equal": {
+            "cmd": "ret",
+            "range": 16
+          }
+        },
+        {
+          "mode": "rva",
+          "pattern": "64 A1 18 00 00 00 8B 40 30 C3",
+          "offset": "0x0"
+        }
+      ]
+    }
+  ]
+}

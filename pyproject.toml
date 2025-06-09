@@ -1,0 +1,26 @@
+[project]
+name = "frida-scan"
+version = "0.1.0"
+description = "A powerful AOB (Array of Bytes) scanner powered by Frida for memory pattern scanning"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "frida",
+    "frida-tools",
+    "pydantic",
+    "pywin32>=300.0.0; sys_platform == 'win32'",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+[project.scripts]
+frida-scan = "src.scanner:scanner.run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+# [tool.setuptools.package-data]
+# frida-scan = ["resource/aobscan2.js"]
