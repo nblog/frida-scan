@@ -16,8 +16,7 @@ A powerful AOB (Array of Bytes) scanner powered by [Frida](https://frida.re/) fo
 ### Using uvx (Recommended)
 
 ```bash
-# Run directly without installation
-uvx --from frida-scan@git+https://github.com/nblog/frida-scan.git frida-scan -n process <config.json> <output.json>
+uvx --from frida-scan@git+https://github.com/nblog/frida-scan.git frida-scan -n notepad.exe config.json.example
 ```
 
 ### Scan Modes
