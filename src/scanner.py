@@ -49,7 +49,7 @@ class addr_transform {
     /** little-endian 128-bit integer from ArrayBuffer */
     toInt128(arr) {
         if (!arr || arr.byteLength < 16) {
-            throw new Error("toInt128: invalid buffer (got " + (arr?.byteLength ?? "null") + ")");
+            throw new Error("toInt128: invalid buffer (got " + (arr ? arr.byteLength : "null") + ")");
         }
         const view = new DataView(arr);
         const lo = view.getBigUint64(0, true);
@@ -199,12 +199,12 @@ rpc.exports = {
     AOBOBJECT: function(vJson) {
         if (null == vJson) return null;
         return {
-            "name": String(vJson["name"] ?? ""),
-            "note": String(vJson["note"] ?? ""),
+            "name": vJson["name"] != null ? String(vJson["name"]) : "",
+            "note": vJson["note"] != null ? String(vJson["note"]) : "",
             "mode": String(vJson["mode"]),
             "pattern": String(vJson["pattern"]),
-            "selected": Number(vJson["selected"] ?? 1),
-            "offset": Number(vJson["offset"] ?? 0),
+            "selected": vJson["selected"] != null ? Number(vJson["selected"]) : 1,
+            "offset": vJson["offset"] != null ? Number(vJson["offset"]) : 0,
             "equal": this.EQUAL(vJson["equal"])
         };
     }
