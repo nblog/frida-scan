@@ -120,7 +120,9 @@ class addr_transform {
     aobscan(pattern, protection) {
         protection = protection || '--x';
         const matches = [];
-        for (const m of this.module().enumerateRanges(protection)) {
+        const ranges = this.module().enumerateRanges(protection);
+        for (let j = 0; j < ranges.length; j++) {
+            const m = ranges[j];
             const rangeMatches = Memory.scanSync(m.base, m.size, pattern);
             for (let i = 0; i < rangeMatches.length; i++) {
                 matches.push(rangeMatches[i]);
