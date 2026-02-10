@@ -206,6 +206,7 @@ rpc.exports = {
 
     def _start(self) -> None:
         _exit_code = 0
+        self._script = None
         try:
             assert self._session is not None
             self._script = self._session.create_script(
