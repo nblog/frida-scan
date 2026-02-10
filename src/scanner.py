@@ -25,6 +25,9 @@ class ScannerApplication(ConsoleApplication):
         return \
 '''
 class addr_transform {
+    #version = 'unknown'
+    #moduleName = ''
+
     constructor(moduleName, version) {
         this.#version = version || 'unknown';
         this.#moduleName = moduleName || Process.enumerateModules()[0].name;
