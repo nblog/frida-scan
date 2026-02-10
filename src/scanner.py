@@ -4,13 +4,15 @@
 Frida-based AOB scanner core functionality
 """
 
+import ast
 import json
+import operator
 import argparse
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
-from src.models import ScanConfig, ScanResults
-from src.exceptions import FridaScanException
+from .models import ScanConfig, ScanResults
+from .exceptions import FridaScanException, ConfigurationError, ScanError
 
 from frida_tools.application import ConsoleApplication
 
@@ -88,7 +90,7 @@ class addr_transform {
         return matches;
     };
 }
-''' \
+''' + \
 '''
 var addr = new addr_transform();
 
@@ -129,21 +131,26 @@ rpc.exports = {
         }
 
         if (null != aobData.equal) {
+            let found = false;
             for (let i = 0; i <= aobData.equal.range;) {
                 const info = Instruction.parse(match);
 
                 if (info.toString().toLowerCase().includes(aobData.equal.cmd.toLowerCase())) {
                     match = info.address;
+                    found = true;
                     break;
                 }
 
                 match = info.next; i += info.size;
             }
+            if (!found) {
+                console.error(`aobscan: \"${name}\" equal instruction \"${aobData.equal.cmd}\" not found within range ${aobData.equal.range}.`);
+                return 0;
+            }
         }
 
         return Number(addr[aobData.mode](match));
     },
-
 
     EQUAL(vJson) {
         if (null == vJson) return null;
@@ -155,13 +162,13 @@ rpc.exports = {
     AOBOBJECT(vJson) {
         if (null == vJson) return null;
         return {
-            "name": String(vJson["name"]),
-            "note": String(vJson["note"]),
+            "name": String(vJson["name"] ?? ""),
+            "note": String(vJson["note"] ?? ""),
 
             "mode": String(vJson["mode"]),
             "pattern": String(vJson["pattern"]),
-            "selected": Number(vJson["selected"]),
-            "offset": Number(vJson["offset"]),
+            "selected": Number(vJson["selected"] ?? 1),
+            "offset": Number(vJson["offset"] ?? 0),
             "equal": this.EQUAL(vJson["equal"]),
         };
     }
@@ -198,6 +205,7 @@ rpc.exports = {
             print(f"[Frida Error] {message['description']}")
 
     def _start(self) -> None:
+        _exit_code = 0
         try:
             assert self._session is not None
             self._script = self._session.create_script(
@@ -212,12 +220,12 @@ rpc.exports = {
             self.export_results(results, self._output_file)
         except Exception as e:
             self._update_status(f"Failed to load script: {e}")
-            self._exit(1)
+            _exit_code = 1
         finally:
             if self._script is not None:
                 self._script.unload()
                 self._script = None
-            self._exit(0)
+            self._exit(_exit_code)
 
 
     def export_results(self, results: ScanResults, output_path: str) -> None:
@@ -251,7 +259,7 @@ rpc.exports = {
                 config_data = json.load(f)
             config = ScanConfig(**config_data)
         except Exception as e:
-            raise FridaScanException(f"Failed to load config: {e}")
+            raise ConfigurationError(f"Failed to load config: {e}")
         
         return self._scan(config)
     
@@ -276,9 +284,11 @@ rpc.exports = {
             if not pattern.name:
                 continue
             
-            # Check for duplicate names
+            # Check for reserved and duplicate names
+            if pattern.name.startswith("#"):
+                raise ConfigurationError(f"Pattern name cannot start with '#' (reserved): {pattern.name}")
             if pattern.name in processes_:
-                raise FridaScanException(f"Duplicate pattern name: {pattern.name}")
+                raise ConfigurationError(f"Duplicate pattern name: {pattern.name}")
             
             # Set default value
             processes_[pattern.name] = self._eval_expr(pattern.value or "0", processes_)
@@ -312,12 +322,49 @@ rpc.exports = {
         
         return ScanResults(results=processes_, version=version)
     
+    # Supported operators for safe expression evaluation
+    _SAFE_OPS = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.FloorDiv: operator.floordiv,
+        ast.Mod: operator.mod,
+        ast.BitAnd: operator.and_,
+        ast.BitOr: operator.or_,
+        ast.BitXor: operator.xor,
+        ast.LShift: operator.lshift,
+        ast.RShift: operator.rshift,
+        ast.USub: operator.neg,
+        ast.UAdd: operator.pos,
+    }
+
     def _eval_expr(self, expr: str, context: Dict[str, int]) -> int:
-        """Safely evaluate mathematical expression"""
+        """Safely evaluate arithmetic expression (no arbitrary code execution)"""
         try:
-            return int(eval(expr, {"__builtins__": {}}, context))
+            tree = ast.parse(expr.strip(), mode='eval')
+            return int(self._eval_node(tree.body, context))
+        except FridaScanException:
+            raise
         except Exception as e:
             raise FridaScanException(f"Failed to evaluate expression '{expr}': {e}")
+
+    def _eval_node(self, node: ast.AST, context: Dict[str, int]) -> int:
+        """Recursively evaluate an AST node with only safe arithmetic operations"""
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return int(node.value)
+        if isinstance(node, ast.Name) and node.id in context:
+            return context[node.id]
+        if isinstance(node, ast.UnaryOp):
+            op_fn = self._SAFE_OPS.get(type(node.op))
+            if op_fn is None:
+                raise FridaScanException(f"Unsupported unary operator: {type(node.op).__name__}")
+            return op_fn(self._eval_node(node.operand, context))
+        if isinstance(node, ast.BinOp):
+            op_fn = self._SAFE_OPS.get(type(node.op))
+            if op_fn is None:
+                raise FridaScanException(f"Unsupported binary operator: {type(node.op).__name__}")
+            return op_fn(self._eval_node(node.left, context), self._eval_node(node.right, context))
+        raise FridaScanException(f"Unsupported expression node: {type(node).__name__}")
     
     def _change_module(self, module: str) -> None:
         """Change target module"""
@@ -335,10 +382,12 @@ rpc.exports = {
         try:
             result = self._script.exports_sync.aobscan(scan_data)
             if result is None:
-                raise FridaScanException(f"Failed to find AOB pattern: {scan_data['pattern']}")
+                raise ScanError(f"Failed to find AOB pattern: {scan_data['pattern']}")
             return result
+        except ScanError:
+            raise
         except Exception as e:
-            raise FridaScanException(f"AOB scan error: {e}")
+            raise ScanError(f"AOB scan error: {e}")
     
     def _get_program_version(self, module: str = "") -> Optional[str]:
         """Get program version information"""

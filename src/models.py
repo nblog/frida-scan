@@ -45,15 +45,6 @@ class ScanConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class ScanResult(BaseModel):
-    """Scan result data"""
-    name: str = Field(..., description="Pattern name")
-    value: int = Field(..., description="Found address/value")
-    note: Optional[str] = Field(default="", description="Pattern note")
-    
-    model_config = ConfigDict(extra="forbid")
-
-
 class ScanResults(BaseModel):
     """Complete scan results"""
     results: Dict[str, int] = Field(default_factory=dict, description="Pattern name to value mapping")
