@@ -19,114 +19,149 @@ from frida_tools.application import ConsoleApplication
 class ScannerApplication(ConsoleApplication):
 
     def _get_builtin_script(self) -> str:
-        """Get built-in JavaScript scanner script"""
-        # https://github.com/nblog/my-fridajs-example/raw/refs/heads/dev/aobscan.ts
+        """Get built-in JavaScript scanner script (pure JavaScript, no TypeScript)"""
+        # Converted from TypeScript to pure JavaScript for QJS compatibility
+        # Source: https://github.com/nblog/my-fridajs-example/raw/refs/heads/dev/aobscan.ts
         return \
 '''
 class addr_transform {
-    #version = 'unknown'
-    #moduleName = ''
+    constructor(moduleName, version) {
+        this.version = version || 'unknown';
+        this.moduleName = moduleName || Process.enumerateModules()[0].name;
+    }
 
-    constructor(moduleName: string='', version: string='') {
-        this.#version = version;
-        this.#moduleName = moduleName || Process.enumerateModules()[0].name;
-    };
+    module() {
+        return Process.getModuleByName(this.moduleName);
+    }
 
-    module() { return Process.getModuleByName(this.#moduleName); };
+    base() {
+        return this.module().base;
+    }
 
-    base() { return this.module().base; };
+    va(rva) {
+        return this.base().add(rva);
+    }
 
-    va(rva: number) { return this.base().add(rva); };
-
-    rva(va: NativePointer) { return va.sub(this.base()).toUInt32(); };
+    rva(va) {
+        return va.sub(this.base()).toUInt32();
+    }
 
     /** little-endian 128-bit integer from ArrayBuffer */
-    private toInt128(arr: ArrayBuffer | null) {
+    toInt128(arr) {
         if (!arr || arr.byteLength < 16) {
-            throw new Error(`toInt128: invalid buffer (got ${arr?.byteLength ?? 'null'})`);
+            throw new Error("toInt128: invalid buffer (got " + (arr?.byteLength ?? "null") + ")");
         }
         const view = new DataView(arr);
         const lo = view.getBigUint64(0, true);
         const hi = view.getBigUint64(8, true);
         return (hi << 64n) | lo;
-    };
+    }
 
     /** read unsigned immediate: number (8/16/32), UInt64 (64), bigint (128) */
-    imm8(addr: NativePointer, immOffset: number=0) { return addr.add(immOffset).readU8(); };
-    imm16(addr: NativePointer, immOffset: number=0) { return addr.add(immOffset).readU16(); };
-    imm32(addr: NativePointer, immOffset: number=0) { return addr.add(immOffset).readU32(); };
-    imm64(addr: NativePointer, immOffset: number=0) { return addr.add(immOffset).readU64(); };
-    imm128(addr: NativePointer, immOffset: number=0) { return this.toInt128(addr.add(immOffset).readByteArray(16)); };
+    imm8(addr, immOffset) {
+        immOffset = immOffset || 0;
+        return addr.add(immOffset).readU8();
+    }
+    imm16(addr, immOffset) {
+        immOffset = immOffset || 0;
+        return addr.add(immOffset).readU16();
+    }
+    imm32(addr, immOffset) {
+        immOffset = immOffset || 0;
+        return addr.add(immOffset).readU32();
+    }
+    imm64(addr, immOffset) {
+        immOffset = immOffset || 0;
+        return addr.add(immOffset).readU64();
+    }
+    imm128(addr, immOffset) {
+        immOffset = immOffset || 0;
+        return this.toInt128(addr.add(immOffset).readByteArray(16));
+    }
 
     /** dereference pointer at addr, then read value. throws on NULL pointer. */
-    deref8(addr: NativePointer) { return this.#derefSafe(addr).readU8(); };
-    deref16(addr: NativePointer) { return this.#derefSafe(addr).readU16(); };
-    deref32(addr: NativePointer) { return this.#derefSafe(addr).readU32(); };
-    deref64(addr: NativePointer) { return this.#derefSafe(addr).readU64(); };
-    deref128(addr: NativePointer) { return this.toInt128(this.#derefSafe(addr).readByteArray(16)); };
+    deref8(addr) {
+        return this.derefSafe(addr).readU8();
+    }
+    deref16(addr) {
+        return this.derefSafe(addr).readU16();
+    }
+    deref32(addr) {
+        return this.derefSafe(addr).readU32();
+    }
+    deref64(addr) {
+        return this.derefSafe(addr).readU64();
+    }
+    deref128(addr) {
+        return this.toInt128(this.derefSafe(addr).readByteArray(16));
+    }
 
-    #derefSafe(addr: NativePointer): NativePointer {
+    derefSafe(addr) {
         const p = addr.readPointer();
         if (p.isNull()) {
-            throw new Error(`deref: NULL pointer at ${addr}`);
+            throw new Error("deref: NULL pointer at " + addr);
         }
         return p;
-    };
+    }
 
     /** x86 rel32 resolve: addr points to the 4-byte displacement field, returns RVA of target.
      *  target = addr + 4 (field size) + *addr (signed displacement) */
-    rel32(addr: NativePointer) { return this.rva(addr.add(4).add(addr.readS32())); };
+    rel32(addr) {
+        return this.rva(addr.add(4).add(addr.readS32()));
+    }
 
     /** resolve CALL/JMP rel32 target from instruction start (single-byte opcode: E8/E9).
      *  NOT suitable for 2-byte opcodes (e.g. 0F 8x, FF 15). */
-    rel32CallTarget(addr: NativePointer) { return this.rel32(addr.add(1)); };
+    rel32CallTarget(addr) {
+        return this.rel32(addr.add(1));
+    }
 
     /** scan module memory for byte pattern. protection filter defaults to executable ('--x'). */
-    aobscan(pattern: string, protection: string='--x') {
+    aobscan(pattern, protection) {
+        protection = protection || '--x';
         const matches = [];
         for (const m of this.module().enumerateRanges(protection)) {
             matches.push(...Memory.scanSync(m.base, m.size, pattern));
         }
         return matches;
-    };
+    }
 }
 ''' + \
 '''
 var addr = new addr_transform();
 
 rpc.exports = {
-    modulepath(module_name='') {
+    modulepath: function(module_name) {
+        module_name = module_name || '';
         return Process.getModuleByName(module_name || addr.module().name).path;
     },
 
-    searchmodule(module_name) {
+    searchmodule: function(module_name) {
         addr = new addr_transform(module_name);
         return true;
     },
 
-    aobscan(vJson) {
+    aobscan: function(vJson) {
         let aobData = this.AOBOBJECT(vJson);
-
         let matches = addr.aobscan(aobData.pattern);
-
         const name = aobData.note || aobData.name;
 
         if (0 == matches.length) {
-            console.error(`aobscan: \"${name}\" not found.`);
+            console.error("aobscan: \"" + name + "\" not found.");
             return 0;
         }
 
         if (1 < matches.length) {
             function toOrdinal(number) {
                 const ordinals = ["", "1st", "2nd", "3rd"];
-                return ordinals[number] || `${number}th`;
+                return ordinals[number] || (number + "th");
             }
-            console.warn(`aobscan: \"${name}\" matches to ${matches.length}, using the ${toOrdinal(aobData.selected)}.`);
+            console.warn("aobscan: \"" + name + "\" matches to " + matches.length + ", using the " + toOrdinal(aobData.selected) + ".");
         }
 
         let match = ptr(matches[aobData.selected - 1].address).add(aobData.offset);
         if (match.isNull()) {
-            console.error(`aobscan: \"${name}\" not found.`);
+            console.error("aobscan: \"" + name + "\" not found.");
             return 0;
         }
 
@@ -141,10 +176,11 @@ rpc.exports = {
                     break;
                 }
 
-                match = info.next; i += info.size;
+                match = info.next;
+                i += info.size;
             }
             if (!found) {
-                console.error(`aobscan: \"${name}\" equal instruction \"${aobData.equal.cmd}\" not found within range ${aobData.equal.range}.`);
+                console.error("aobscan: \"" + name + "\" equal instruction \"" + aobData.equal.cmd + "\" not found within range " + aobData.equal.range + ".");
                 return 0;
             }
         }
@@ -152,27 +188,27 @@ rpc.exports = {
         return Number(addr[aobData.mode](match));
     },
 
-    EQUAL(vJson) {
+    EQUAL: function(vJson) {
         if (null == vJson) return null;
         return {
             "cmd": String(vJson["cmd"]),
             "range": Number(vJson["range"])
         };
     },
-    AOBOBJECT(vJson) {
+
+    AOBOBJECT: function(vJson) {
         if (null == vJson) return null;
         return {
             "name": String(vJson["name"] ?? ""),
             "note": String(vJson["note"] ?? ""),
-
             "mode": String(vJson["mode"]),
             "pattern": String(vJson["pattern"]),
             "selected": Number(vJson["selected"] ?? 1),
             "offset": Number(vJson["offset"] ?? 0),
-            "equal": this.EQUAL(vJson["equal"]),
+            "equal": this.EQUAL(vJson["equal"])
         };
     }
-}
+};
 '''
 
     def _needs_target(self) -> bool:
