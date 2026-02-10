@@ -26,12 +26,12 @@ class ScannerApplication(ConsoleApplication):
 '''
 class addr_transform {
     constructor(moduleName, version) {
-        this.version = version || 'unknown';
-        this.moduleName = moduleName || Process.enumerateModules()[0].name;
+        this.#version = version || 'unknown';
+        this.#moduleName = moduleName || Process.enumerateModules()[0].name;
     }
 
     module() {
-        return Process.getModuleByName(this.moduleName);
+        return Process.getModuleByName(this.#moduleName);
     }
 
     base() {
@@ -47,9 +47,9 @@ class addr_transform {
     }
 
     /** little-endian 128-bit integer from ArrayBuffer */
-    toInt128(arr) {
+    #toInt128(arr) {
         if (!arr || arr.byteLength < 16) {
-            throw new Error("toInt128: invalid buffer (got " + (arr ? arr.byteLength : "null") + ")");
+            throw new Error(`toInt128: invalid buffer (got ${arr?.byteLength ?? 'null'})`);
         }
         const view = new DataView(arr);
         const lo = view.getBigUint64(0, true);
@@ -76,30 +76,30 @@ class addr_transform {
     }
     imm128(addr, immOffset) {
         immOffset = immOffset || 0;
-        return this.toInt128(addr.add(immOffset).readByteArray(16));
+        return this.#toInt128(addr.add(immOffset).readByteArray(16));
     }
 
     /** dereference pointer at addr, then read value. throws on NULL pointer. */
     deref8(addr) {
-        return this.derefSafe(addr).readU8();
+        return this.#derefSafe(addr).readU8();
     }
     deref16(addr) {
-        return this.derefSafe(addr).readU16();
+        return this.#derefSafe(addr).readU16();
     }
     deref32(addr) {
-        return this.derefSafe(addr).readU32();
+        return this.#derefSafe(addr).readU32();
     }
     deref64(addr) {
-        return this.derefSafe(addr).readU64();
+        return this.#derefSafe(addr).readU64();
     }
     deref128(addr) {
-        return this.toInt128(this.derefSafe(addr).readByteArray(16));
+        return this.#toInt128(this.#derefSafe(addr).readByteArray(16));
     }
 
-    derefSafe(addr) {
+    #derefSafe(addr) {
         const p = addr.readPointer();
         if (p.isNull()) {
-            throw new Error("deref: NULL pointer at " + addr);
+            throw new Error(`deref: NULL pointer at ${addr}`);
         }
         return p;
     }
@@ -120,16 +120,11 @@ class addr_transform {
     aobscan(pattern, protection) {
         protection = protection || '--x';
         const matches = [];
-        const ranges = this.module().enumerateRanges(protection);
-        for (let j = 0; j < ranges.length; j++) {
-            const m = ranges[j];
-            const rangeMatches = Memory.scanSync(m.base, m.size, pattern);
-            for (let i = 0; i < rangeMatches.length; i++) {
-                matches.push(rangeMatches[i]);
-            }
+        for (const m of this.module().enumerateRanges(protection)) {
+            matches.push(...Memory.scanSync(m.base, m.size, pattern));
         }
         return matches;
-    }
+    };
 }
 ''' + \
 '''
@@ -152,7 +147,7 @@ rpc.exports = {
         const name = aobData.note || aobData.name;
 
         if (0 == matches.length) {
-            console.error("aobscan: \"" + name + "\" not found.");
+            console.error(`aobscan: \"${name}\" not found.`);
             return 0;
         }
 
@@ -161,12 +156,12 @@ rpc.exports = {
                 const ordinals = ["", "1st", "2nd", "3rd"];
                 return ordinals[number] || (number + "th");
             }
-            console.warn("aobscan: \"" + name + "\" matches to " + matches.length + ", using the " + toOrdinal(aobData.selected) + ".");
+            console.warn(`aobscan: \"${name}\" matches to ${matches.length}, using the ${toOrdinal(aobData.selected)}.`);
         }
 
         let match = ptr(matches[aobData.selected - 1].address).add(aobData.offset);
         if (match.isNull()) {
-            console.error("aobscan: \"" + name + "\" not found.");
+            console.error(`aobscan: \"${name}\" not found.`);
             return 0;
         }
 
@@ -185,7 +180,7 @@ rpc.exports = {
                 i += info.size;
             }
             if (!found) {
-                console.error("aobscan: \"" + name + "\" equal instruction \"" + aobData.equal.cmd + "\" not found within range " + aobData.equal.range + ".");
+                console.error(`aobscan: \"${name}\" equal instruction \"${aobData.equal.cmd}\" not found within range ${aobData.equal.range}.`);
                 return 0;
             }
         }
@@ -204,12 +199,13 @@ rpc.exports = {
     AOBOBJECT: function(vJson) {
         if (null == vJson) return null;
         return {
-            "name": vJson["name"] != null ? String(vJson["name"]) : "",
-            "note": vJson["note"] != null ? String(vJson["note"]) : "",
+            "name": String(vJson["name"] ?? ""),
+            "note": String(vJson["note"] ?? ""),
+
             "mode": String(vJson["mode"]),
             "pattern": String(vJson["pattern"]),
-            "selected": vJson["selected"] != null ? Number(vJson["selected"]) : 1,
-            "offset": vJson["offset"] != null ? Number(vJson["offset"]) : 0,
+            "selected": Number(vJson["selected"] ?? 1),
+            "offset": Number(vJson["offset"] ?? 0),
             "equal": this.EQUAL(vJson["equal"])
         };
     }
