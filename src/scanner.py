@@ -121,7 +121,10 @@ class addr_transform {
         protection = protection || '--x';
         const matches = [];
         for (const m of this.module().enumerateRanges(protection)) {
-            matches.push(...Memory.scanSync(m.base, m.size, pattern));
+            const rangeMatches = Memory.scanSync(m.base, m.size, pattern);
+            for (let i = 0; i < rangeMatches.length; i++) {
+                matches.push(rangeMatches[i]);
+            }
         }
         return matches;
     }
