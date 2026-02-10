@@ -17,7 +17,7 @@ build-backend = "hatchling.build"
 
 
 [project.scripts]
-frida-scan = "src.scanner:scanner.run"
+frida-scan = "src.scanner"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]

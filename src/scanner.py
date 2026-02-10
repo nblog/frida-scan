@@ -5,7 +5,6 @@ Frida-based AOB scanner core functionality
 """
 
 import json
-import codecs
 import argparse
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -16,69 +15,18 @@ from src.exceptions import FridaScanException
 from frida_tools.application import ConsoleApplication
 
 class ScannerApplication(ConsoleApplication):
-    def _needs_target(self) -> bool:
-        return True
-    
-    def _usage(self) -> str:
-        return "%(prog)s [options] Config.json [--output Output.json]"
-    
-    def _initialize(self, parser: argparse.ArgumentParser, options: argparse.Namespace, args: List[str]) -> None:
-        self._config_file = options.config_file
-        self._output_file = options.output_file
-    
-    def _add_options(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            'config_file',
-            type=Path,
-            help='JSON file containing scan patterns'
-        )
-        parser.add_argument(
-            '--output',
-            dest='output_file',
-            type=Path,
-            default=Path('output.json'),
-            help='Output file for scan results (JSON format, default: output.json)'
-        )
-
-    def _on_message(self, message: Dict[str, Any], data: Any) -> None:
-        """Handle messages from Frida script"""
-        if message['type'] == 'error':
-            print(f"[Frida Error] {message['description']}")
-
-    def _start(self) -> None:
-        try:
-            assert self._session is not None
-            self._script = self._session.create_script(
-                name="scanner",
-                source=self._get_builtin_script(),
-                runtime=self._runtime)
-            self._script.on("message", self._on_message)
-            self._on_script_created(self._script)
-            self._script.load()
-            
-            results = self.scan_from_config(self._config_file)
-            self.export_results(results, self._output_file)
-        except Exception as e:
-            self._update_status(f"Failed to load script: {e}")
-            self._exit(1)
-        finally:
-            if self._script is not None:
-                self._script.unload()
-                self._script = None
-            self._exit(0)
-
 
     def _get_builtin_script(self) -> str:
         """Get built-in JavaScript scanner script"""
-        # with codecs.open(r"resource/aobscan2.js", encoding='utf-8-sig') as f:
-        #     return f.read()
+        # https://github.com/nblog/my-fridajs-example/raw/refs/heads/dev/aobscan.ts
         return \
 '''
-/* Frida AOB Scanner Script */
 class addr_transform {
+    #version = 'unknown'
     #moduleName = ''
 
-    constructor(moduleName='') {
+    constructor(moduleName: string='', version: string='') {
+        this.#version = version;
         this.#moduleName = moduleName || Process.enumerateModules()[0].name;
     };
 
@@ -86,35 +34,65 @@ class addr_transform {
 
     base() { return this.module().base; };
 
-    va(rva) { return this.base().add(rva); };
+    va(rva: number) { return this.base().add(rva); };
 
-    rva(va) { return Number(va.sub(this.base()).and(0x7fffffff)); };
+    rva(va: NativePointer) { return va.sub(this.base()).toUInt32(); };
 
-    imm8(addr) { return addr.readU8(); };
+    /** little-endian 128-bit integer from ArrayBuffer */
+    private toInt128(arr: ArrayBuffer | null) {
+        if (!arr || arr.byteLength < 16) {
+            throw new Error(`toInt128: invalid buffer (got ${arr?.byteLength ?? 'null'})`);
+        }
+        const view = new DataView(arr);
+        const lo = view.getBigUint64(0, true);
+        const hi = view.getBigUint64(8, true);
+        return (hi << 64n) | lo;
+    };
 
-    imm16(addr) { return addr.readU16(); };
+    /** read unsigned immediate: number (8/16/32), UInt64 (64), bigint (128) */
+    imm8(addr: NativePointer, immOffset: number=0) { return addr.add(immOffset).readU8(); };
+    imm16(addr: NativePointer, immOffset: number=0) { return addr.add(immOffset).readU16(); };
+    imm32(addr: NativePointer, immOffset: number=0) { return addr.add(immOffset).readU32(); };
+    imm64(addr: NativePointer, immOffset: number=0) { return addr.add(immOffset).readU64(); };
+    imm128(addr: NativePointer, immOffset: number=0) { return this.toInt128(addr.add(immOffset).readByteArray(16)); };
 
-    imm32(addr) { return addr.readU32(); };
+    /** dereference pointer at addr, then read value. throws on NULL pointer. */
+    deref8(addr: NativePointer) { return this.#derefSafe(addr).readU8(); };
+    deref16(addr: NativePointer) { return this.#derefSafe(addr).readU16(); };
+    deref32(addr: NativePointer) { return this.#derefSafe(addr).readU32(); };
+    deref64(addr: NativePointer) { return this.#derefSafe(addr).readU64(); };
+    deref128(addr: NativePointer) { return this.toInt128(this.#derefSafe(addr).readByteArray(16)); };
 
-    imm64(addr) { return addr.readU64(); }
+    #derefSafe(addr: NativePointer): NativePointer {
+        const p = addr.readPointer();
+        if (p.isNull()) {
+            throw new Error(`deref: NULL pointer at ${addr}`);
+        }
+        return p;
+    };
 
-    mem32(addr) { return this.rva(addr.add(addr.readS32()).add(4)); };
+    /** x86 rel32 resolve: addr points to the 4-byte displacement field, returns RVA of target.
+     *  target = addr + 4 (field size) + *addr (signed displacement) */
+    rel32(addr: NativePointer) { return this.rva(addr.add(4).add(addr.readS32())); };
 
-    /*branch*/call(addr) { return this.mem32(addr.add(1)); };
+    /** resolve CALL/JMP rel32 target from instruction start (single-byte opcode: E8/E9).
+     *  NOT suitable for 2-byte opcodes (e.g. 0F 8x, FF 15). */
+    rel32CallTarget(addr: NativePointer) { return this.rel32(addr.add(1)); };
 
-    aobscan(pattern) {
+    /** scan module memory for byte pattern. protection filter defaults to executable ('--x'). */
+    aobscan(pattern: string, protection: string='--x') {
         const matches = [];
-        for (const m of this.module().enumerateRanges('--x')) {
+        for (const m of this.module().enumerateRanges(protection)) {
             matches.push(...Memory.scanSync(m.base, m.size, pattern));
         }
         return matches;
     };
 }
-
+''' \
+'''
 var addr = new addr_transform();
 
 rpc.exports = {
-
     modulepath(module_name='') {
         return Process.getModuleByName(module_name || addr.module().name).path;
     },
@@ -189,7 +167,59 @@ rpc.exports = {
     }
 }
 '''
+
+    def _needs_target(self) -> bool:
+        return True
     
+    def _usage(self) -> str:
+        return "%(prog)s [options] Config.json [--output Output.json]"
+    
+    def _initialize(self, parser: argparse.ArgumentParser, options: argparse.Namespace, args: List[str]) -> None:
+        self._config_file = options.config_file
+        self._output_file = options.output_file
+    
+    def _add_options(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            'config_file',
+            type=Path,
+            help='JSON file containing scan patterns'
+        )
+        parser.add_argument(
+            '--output',
+            dest='output_file',
+            type=Path,
+            default=Path('output.json'),
+            help='Output file for scan results (JSON format, default: output.json)'
+        )
+
+    def _on_message(self, message: Dict[str, Any], data: Any) -> None:
+        """Handle messages from Frida script"""
+        if message['type'] == 'error':
+            print(f"[Frida Error] {message['description']}")
+
+    def _start(self) -> None:
+        try:
+            assert self._session is not None
+            self._script = self._session.create_script(
+                name="scanner",
+                source=self._get_builtin_script(),
+                runtime=self._runtime)
+            self._script.on("message", self._on_message)
+            self._on_script_created(self._script)
+            self._script.load()
+            
+            results = self.scan_from_config(self._config_file)
+            self.export_results(results, self._output_file)
+        except Exception as e:
+            self._update_status(f"Failed to load script: {e}")
+            self._exit(1)
+        finally:
+            if self._script is not None:
+                self._script.unload()
+                self._script = None
+            self._exit(0)
+
+
     def export_results(self, results: ScanResults, output_path: str) -> None:
         """
         Export scan results to JSON file
@@ -217,7 +247,7 @@ rpc.exports = {
         """
         # Load configuration
         try:
-            with codecs.open(config_path, encoding='utf-8-sig') as f:
+            with open(config_path, encoding='utf-8-sig') as f:
                 config_data = json.load(f)
             config = ScanConfig(**config_data)
         except Exception as e:
@@ -325,5 +355,6 @@ rpc.exports = {
         return None
 
 
-scanner = ScannerApplication()
-scanner.run()
+if __name__ == "__main__":
+    scanner = ScannerApplication()
+    scanner.run()
