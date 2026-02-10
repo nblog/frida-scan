@@ -355,6 +355,10 @@ rpc.exports = {
         return None
 
 
-if __name__ == "__main__":
+def main():
+    """Console script entry point"""
     scanner = ScannerApplication()
     scanner.run()
+
+if __name__ == "__main__":
+    main()

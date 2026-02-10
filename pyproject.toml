@@ -1,13 +1,13 @@
 [project]
 name = "frida-scan"
-version = "0.1.0"
+version = "0.1.1"
 description = "A powerful AOB (Array of Bytes) scanner powered by Frida for memory pattern scanning"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "pydantic",
     "frida",
     "frida-tools",
-    "pydantic",
     "pywin32>=300.0.0; sys_platform == 'win32'",
 ]
 
@@ -17,7 +17,7 @@ build-backend = "hatchling.build"
 
 
 [project.scripts]
-frida-scan = "src.scanner"
+frida-scan = "src.scanner:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
