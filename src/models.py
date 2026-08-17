@@ -5,10 +5,28 @@ Data models for frida-scan
 """
 
 from typing import List, Dict, Optional, Any
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
-class InsEqual(BaseModel):
+class ScanModel(BaseModel):
+    """Base model that tolerates ``$``-prefixed metadata keys (e.g. ``$usage``).
+
+    Such keys are stripped before validation so self-documenting fields can
+    live alongside the real config, while every other unknown key is still
+    rejected by ``extra="forbid"``.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _strip_meta_keys(cls, data):
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items()
+                    if not (isinstance(k, str) and k.startswith("$"))}
+        return data
+
+
+class InsEqual(ScanModel):
     """Instruction equality check configuration"""
     cmd: str = Field(..., description="Instruction command to match")
     range: int = Field(default=16, description="Range to search for instruction")
@@ -16,7 +34,7 @@ class InsEqual(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class AobData(BaseModel):
+class AobData(ScanModel):
     """Array of Bytes scan configuration"""
     mode: str = Field(..., description="Scan mode: rva, va, imm8, imm16, imm32, imm64, mem32, call")
     pattern: str = Field(..., description="Byte pattern to search for")
@@ -27,7 +45,7 @@ class AobData(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class PatternData(BaseModel):
+class PatternData(ScanModel):
     """Pattern configuration for scanning"""
     name: str = Field(..., description="Pattern name")
     note: Optional[str] = Field(default="", description="Pattern description")
@@ -37,7 +55,7 @@ class PatternData(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class ScanConfig(BaseModel):
+class ScanConfig(ScanModel):
     """Main scan configuration"""
     patterns: List[PatternData] = Field(..., description="List of patterns to scan")
     module: Optional[str] = Field(default="", description="Target module name")
