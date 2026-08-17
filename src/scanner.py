@@ -6,6 +6,7 @@ Frida-based AOB scanner core functionality
 
 import ast
 import json
+import logging
 import operator
 import argparse
 from typing import List, Dict, Any, Optional
@@ -15,6 +16,9 @@ from .models import ScanConfig, ScanResults
 from .exceptions import FridaScanException, ConfigurationError, ScanError
 
 from frida_tools.application import ConsoleApplication
+
+logger = logging.getLogger("frida-scan")
+
 
 class ScannerApplication(ConsoleApplication):
 
@@ -242,7 +246,7 @@ rpc.exports = {
     def _on_message(self, message: Dict[str, Any], data: Any) -> None:
         """Handle messages from Frida script"""
         if message['type'] == 'error':
-            print(f"[Frida Error] {message['description']}")
+            logger.error("[Frida Error] %s", message['description'])
 
     def _start(self) -> None:
         _exit_code = 0
@@ -271,18 +275,33 @@ rpc.exports = {
 
     def export_results(self, results: ScanResults, output_path: str) -> None:
         """
-        Export scan results to JSON file
-        
+        Export scan results to JSON file and report a summary to the console.
+
         Args:
             results: ScanResults object
             output_path: Output file path
         """
-        export_data = dict(results.results)
+        export_data: Dict[str, Any] = dict(results.results)
         if results.version:
             export_data["#version"] = results.version
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
+
+        output_file = Path(output_path)
+        with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(export_data, f, indent=2, ensure_ascii=False)
+
+        self._report_summary(results, output_file)
+
+    def _report_summary(self, results: ScanResults, output_path: Path) -> None:
+        """Log a human-readable summary so the run never ends silently."""
+        count = len(results.results)
+        plural = "" if count == 1 else "s"
+        logger.info("")
+        logger.info("Scan complete: %d result%s", count, plural)
+        if results.version:
+            logger.info("Target version: %s", results.version)
+        for name, value in results.results.items():
+            logger.info("  %s = 0x%X (%d)", name, value, value)
+        logger.info("Results written to: %s", output_path.resolve())
     
     def scan_from_config(self, config_path: str) -> ScanResults:
         """
@@ -447,6 +466,10 @@ rpc.exports = {
 
 def main():
     """Console script entry point"""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(message)s",
+    )
     scanner = ScannerApplication()
     scanner.run()
 
