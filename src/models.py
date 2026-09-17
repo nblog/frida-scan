@@ -4,18 +4,45 @@
 Data models for frida-scan
 """
 
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Literal, Optional
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
+# Keys used as ``addr[mode](match)`` in the embedded Frida scanner script.
+ScanMode = Literal[
+    "rva",
+    "va",
+    "imm8",
+    "imm16",
+    "imm32",
+    "imm64",
+    "imm128",
+    "deref8",
+    "deref16",
+    "deref32",
+    "deref64",
+    "deref128",
+    "rel32",
+    "rel32CallTarget",
+]
+
+
 class ScanModel(BaseModel):
-    """Base model that tolerates ``$``-prefixed metadata keys (e.g. ``$usage``).
+    """Base model that tolerates ``$``-prefixed metadata keys (e.g. ``$schema``, ``$usage``).
 
     Such keys are stripped before validation so self-documenting fields can
     live alongside the real config, while every other unknown key is still
-    rejected by ``extra="forbid"``.
+    rejected by ``extra="forbid"``. JSON Schema mirrors that contract with
+    ``patternProperties`` so editors accept the same metadata keys.
     """
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "patternProperties": {
+                "^\\$": True,
+            },
+        },
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -27,45 +54,67 @@ class ScanModel(BaseModel):
 
 
 class InsEqual(ScanModel):
-    """Instruction equality check configuration"""
-    cmd: str = Field(..., description="Instruction command to match")
-    range: int = Field(default=16, description="Range to search for instruction")
-    
-    model_config = ConfigDict(extra="forbid")
+    """Instruction equality check configuration.
+
+    After a pattern match, walk instructions from the adjusted address until
+    ``cmd`` is found or ``range`` bytes have been consumed.
+    """
+    cmd: str = Field(..., min_length=1, description="Instruction text to match (substring, case-insensitive)")
+    range: int = Field(default=16, ge=0, description="Maximum number of bytes to search for the instruction")
 
 
 class AobData(ScanModel):
-    """Array of Bytes scan configuration"""
-    mode: str = Field(..., description="Scan mode: rva, va, imm8, imm16, imm32, imm64, mem32, call")
-    pattern: str = Field(..., description="Byte pattern to search for")
-    selected: Optional[int] = Field(default=1, description="Which match to select (1-based)")
-    offset: Optional[str] = Field(default="0", description="Offset expression")
-    equal: Optional[InsEqual] = Field(default=None, description="Instruction equality check")
-    
-    model_config = ConfigDict(extra="forbid")
+    """Array of Bytes scan configuration.
+
+    ``pattern`` is scanned in the target module; ``offset`` is evaluated and
+    added to the selected match before ``mode`` reads the final value.
+    """
+    mode: ScanMode = Field(
+        ...,
+        description=(
+            "How to interpret the match address: rva/va; "
+            "imm8/16/32/64/128 (unsigned immediate); "
+            "deref8/16/32/64/128 (dereference pointer then read); "
+            "rel32 (x86 rel32 displacement field to target RVA); "
+            "rel32CallTarget (CALL/JMP rel32 opcode E8/E9 to target RVA)"
+        ),
+    )
+    pattern: str = Field(
+        ...,
+        min_length=1,
+        description="Byte pattern to search for (space-separated hex; ``??`` wildcards cannot be the last byte)",
+    )
+    selected: int = Field(default=1, ge=1, description="Which match to select (1-based)")
+    offset: str = Field(default="0", description="Offset expression evaluated from the match address")
+    equal: Optional[InsEqual] = Field(default=None, description="Optional instruction equality check")
 
 
 class PatternData(ScanModel):
-    """Pattern configuration for scanning"""
-    name: str = Field(..., description="Pattern name")
-    note: Optional[str] = Field(default="", description="Pattern description")
-    value: Optional[str] = Field(default="0", description="Default value expression")
-    aob: Optional[List[AobData]] = Field(default=None, description="AOB scan configurations")
-    
-    model_config = ConfigDict(extra="forbid")
+    """Named scan result produced from an optional AOB chain.
+
+    ``value`` is the fallback expression; the first successful AOB overwrites
+    it. Pattern names are also identifiers in later expressions.
+    """
+    name: str = Field(
+        ...,
+        min_length=1,
+        pattern=r"^[^#].*$",
+        description="Pattern name (cannot start with ``#``, which is reserved)",
+    )
+    note: str = Field(default="", description="Pattern description")
+    value: str = Field(default="0", description="Default value expression used when no AOB matches")
+    aob: Optional[List[AobData]] = Field(default=None, description="AOB scan configurations; first success wins")
 
 
 class ScanConfig(ScanModel):
-    """Main scan configuration"""
-    patterns: List[PatternData] = Field(..., description="List of patterns to scan")
-    module: Optional[str] = Field(default="", description="Target module name")
-    
-    model_config = ConfigDict(extra="forbid")
+    """Main scan configuration loaded from the JSON config file."""
+    patterns: List[PatternData] = Field(..., min_length=1, description="List of patterns to scan")
+    module: str = Field(default="", description="Target module name; empty uses the first loaded module")
 
 
 class ScanResults(BaseModel):
     """Complete scan results"""
     results: Dict[str, int] = Field(default_factory=dict, description="Pattern name to value mapping")
     version: Optional[str] = Field(default=None, description="Target program version")
-    
+
     model_config = ConfigDict(extra="forbid")

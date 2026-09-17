@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "config.schema.json",
+  "$defs": {
+    "AobData": {
+      "additionalProperties": false,
+      "description": "Array of Bytes scan configuration.\n\n``pattern`` is scanned in the target module; ``offset`` is evaluated and\nadded to the selected match before ``mode`` reads the final value.",
+      "patternProperties": {
+        "^\\$": true
+      },
+      "properties": {
+        "mode": {
+          "description": "How to interpret the match address: rva/va; imm8/16/32/64/128 (unsigned immediate); deref8/16/32/64/128 (dereference pointer then read); rel32 (x86 rel32 displacement field to target RVA); rel32CallTarget (CALL/JMP rel32 opcode E8/E9 to target RVA)",
+          "enum": [
+            "rva",
+            "va",
+            "imm8",
+            "imm16",
+            "imm32",
+            "imm64",
+            "imm128",
+            "deref8",
+            "deref16",
+            "deref32",
+            "deref64",
+            "deref128",
+            "rel32",
+            "rel32CallTarget"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "pattern": {
+          "description": "Byte pattern to search for (space-separated hex; ``??`` wildcards cannot be the last byte)",
+          "minLength": 1,
+          "title": "Pattern",
+          "type": "string"
+        },
+        "selected": {
+          "default": 1,
+          "description": "Which match to select (1-based)",
+          "minimum": 1,
+          "title": "Selected",
+          "type": "integer"
+        },
+        "offset": {
+          "default": "0",
+          "description": "Offset expression evaluated from the match address",
+          "title": "Offset",
+          "type": "string"
+        },
+        "equal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InsEqual"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional instruction equality check"
+        }
+      },
+      "required": [
+        "mode",
+        "pattern"
+      ],
+      "title": "AobData",
+      "type": "object"
+    },
+    "InsEqual": {
+      "additionalProperties": false,
+      "description": "Instruction equality check configuration.\n\nAfter a pattern match, walk instructions from the adjusted address until\n``cmd`` is found or ``range`` bytes have been consumed.",
+      "patternProperties": {
+        "^\\$": true
+      },
+      "properties": {
+        "cmd": {
+          "description": "Instruction text to match (substring, case-insensitive)",
+          "minLength": 1,
+          "title": "Cmd",
+          "type": "string"
+        },
+        "range": {
+          "default": 16,
+          "description": "Maximum number of bytes to search for the instruction",
+          "minimum": 0,
+          "title": "Range",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cmd"
+      ],
+      "title": "InsEqual",
+      "type": "object"
+    },
+    "PatternData": {
+      "additionalProperties": false,
+      "description": "Named scan result produced from an optional AOB chain.\n\n``value`` is the fallback expression; the first successful AOB overwrites\nit. Pattern names are also identifiers in later expressions.",
+      "patternProperties": {
+        "^\\$": true
+      },
+      "properties": {
+        "name": {
+          "description": "Pattern name (cannot start with ``#``, which is reserved)",
+          "minLength": 1,
+          "pattern": "^[^#].*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "description": "Pattern description",
+          "title": "Note",
+          "type": "string"
+        },
+        "value": {
+          "default": "0",
+          "description": "Default value expression used when no AOB matches",
+          "title": "Value",
+          "type": "string"
+        },
+        "aob": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/AobData"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "AOB scan configurations; first success wins",
+          "title": "Aob"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "PatternData",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Main scan configuration loaded from the JSON config file.",
+  "patternProperties": {
+    "^\\$": true
+  },
+  "properties": {
+    "patterns": {
+      "description": "List of patterns to scan",
+      "items": {
+        "$ref": "#/$defs/PatternData"
+      },
+      "minItems": 1,
+      "title": "Patterns",
+      "type": "array"
+    },
+    "module": {
+      "default": "",
+      "description": "Target module name; empty uses the first loaded module",
+      "title": "Module",
+      "type": "string"
+    }
+  },
+  "required": [
+    "patterns"
+  ],
+  "title": "ScanConfig",
+  "type": "object"
+}
