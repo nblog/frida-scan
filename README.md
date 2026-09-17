@@ -19,6 +19,10 @@ A powerful AOB (Array of Bytes) scanner powered by [Frida](https://frida.re/) fo
 uvx --from git+https://github.com/nblog/frida-scan frida-scan -n notepad.exe config.json.example
 ```
 
+Point `$schema` at the published [config schema](https://github.com/nblog/frida-scan/raw/refs/heads/main/config.schema.json) so editors can complete and validate scan configs:
+
+> "$schema": "https://github.com/nblog/frida-scan/raw/refs/heads/main/config.schema.json"
+
 ### Scan Modes
 
 - **`rva`**: Relative Virtual Address (offset from module base)

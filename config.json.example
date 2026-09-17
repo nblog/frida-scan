@@ -1,4 +1,5 @@
 {
+  "$schema": "https://github.com/nblog/frida-scan/raw/refs/heads/main/config.schema.json",
   "module": "ntdll.dll",
   "patterns": [
     {
